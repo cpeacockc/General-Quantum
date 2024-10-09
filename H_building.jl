@@ -418,6 +418,16 @@ function H_Anderson1D(L,W,t)
     return H_Anderson
 end
 
+
+function H_Anderson1D(L,W,t,h)
+
+    H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
+
+    H_Anderson[1,L]=-t
+    H_Anderson[L,1]=-t
+    return H_Anderson
+end
+
 function H_Anderson3D(L,W,t)
 
     H = spzeros(L^3,L^3)
