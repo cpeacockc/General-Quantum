@@ -29,46 +29,7 @@ function Lanczos(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matri
         O[2] = (A_n/b_n)
         #println("n=$n, bn=$b_n")
     end
-    return b1[2:end],b2[2:end],b_sb[2:end]
-end
-
-function Lanczos_subtract(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H_1::Union{Matrix,DenseMatrix,SparseMatrixCSC},H_2::Union{Matrix,DenseMatrix,SparseMatrixCSC},Nsteps::Int64)
-
-
-    #Base vector
-    O_1 = [];O_2 = [];O_sb = []
-    b_1 = Float64[0];b_2 = Float64[0];b_sb = Float64[0]
-    #Define O0
-    Probe/=Op_Norm(Probe)
-    push!(O_1,Probe),push!(O_2,Probe),push!(O_sb,Probe)
-    LO_1_0 = L_n(O_1[1],H_1,2)
-    LO_2_0 = L_n(O_2[1],H_2,2)
-    LO_sb_0 = LO_1_0-LO_2_0
-    #Define b1, b0 is set to 0
-    push!(b_1,Op_Norm(LO_1_0))
-    push!(b_2,Op_Norm(LO_2_0))
-    push!(b_sb,Op_Norm(LO_sb_0))
-    
-    #Define O1
-    push!(O_1,LO_1_0/b_1[2])
-    push!(O_2,LO_2_0/b_2[2])
-    push!(O_sb,LO_sb_0/b_sb[2])
-    
-    for n in ProgressBar(3:Nsteps)
-        A_1_n = L_n(O_1[2],H_1,n) - b_1[n-1]*O_1[1]
-        A_2_n = L_n(O_2[2],H_2,n) - b_2[n-1]*O_2[1]
-        A_sb_n = A_1_n - A_2_n
-
-
-        b1 = Op_Norm(A_1_n)
-        b2 = Op_Norm(A_2_n)
-        bsb = Op_Norm(A_sb_n)
-        push!(b_1,b1);push!(b_2,b2);push!(b_sb,bsb)
-        O_1[1]=O_1[2];O_2[1]=O_2[2];O_sb[1]=O_sb[2]
-        O_1[2] = (A_1_n/b1);O_2[2] = (A_2_n/b2);O_sb[2] = (A_sb_n/bsb);
-        #println("n=$n, bn=$b_n")
-    end
-    return b_1[2:end],b_2[2:end],b_sb[2:end]
+    return b[2:end]
 end
 
 function Lanczos_monic(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matrix,DenseMatrix,SparseMatrixCSC},Nsteps::Int64)
@@ -238,7 +199,6 @@ function x_from_b(bn)
 end
 
 
-var_of_sum(cov_M, N::Int64) = [sum(cov_M[1:n, 1:n]) for n in 1:N]
 
 function x_generate(bn_tot,K)
     arr_length = length((bn_tot[:,1])[1:2:end])-1
@@ -267,11 +227,8 @@ function bn_statistics(value_vec)
     xs_vars=[]
     xs_var_cumsums=[]
     xs_means=[]
-    xs_medians=[]
     xs_covs=[]
-    gn_covs=[]
     xs_mean_cumsums=[]
-    xs_median_cumsums=[]
     for (H_flag,L,W,Nsteps,Nsamples) in value_vec
             fid = h5open(replace(H_flag*"-L$L-W$W-Nsteps$Nsteps-Nsamples$Nsamples-Exported", "." => "_")*".h5","r")        
             G = fid["b"]
@@ -290,9 +247,7 @@ function bn_statistics(value_vec)
         xs_var = var(xs,dims=2)[:]
         xs_var_cumsum = var(xs_cumsum,dims=2)[:]
         xs_mean = mean(xs,dims=2)[:]
-        xs_med = median(xs,dims=2)[:]
         xs_cov = cov(xs,dims=2)
-        gn_cov = cov(xs_cumsum,dims=2)
         ratios = exp.(-1 .* xs)
 
         push!(bn_avgs,bn_avg)
@@ -300,33 +255,35 @@ function bn_statistics(value_vec)
         push!(xs_vars,xs_var)
         push!(xs_var_cumsums,xs_var_cumsum)
         push!(xs_means,xs_mean)
-        push!(xs_medians,xs_med)
         push!(xs_covs,xs_cov)
-        push!(gn_covs,gn_cov)
-        push!(xs_median_cumsums,median(xs_cumsum,dims=2)[:])
         push!(xs_mean_cumsums,mean(xs_cumsum,dims=2)[:])
     end
-    return bn_avgs,xss,xs_vars,xs_var_cumsums,xs_means,xs_covs,gn_covs,xs_mean_cumsums, xs_medians, xs_median_cumsums
+    return bn_avgs,xss,xs_vars,xs_var_cumsums,xs_means,xs_covs,xs_mean_cumsums
 end
-function bn_statistics_biased(value_vec)
+
+function bn_statistics(value_vec,flag)
     cd("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//Anderson_krylov//Outs//Lanczos_exports/")
     bn_avgs=[]
     xss=[]
     xs_vars=[]
     xs_var_cumsums=[]
     xs_means=[]
-    xs_medians=[]
     xs_covs=[]
-    gn_covs=[]
     xs_mean_cumsums=[]
-    xs_median_cumsums=[]
-    for (H_flag,L,W,a,Nsteps,Nsamples) in value_vec
-            fid = h5open(replace(H_flag*"-L$L-W$W-a$a-Nsteps$Nsteps-Nsamples$Nsamples-Exported", "." => "_")*".h5","r")        
+    for (H_flag,L,W,Nsteps,Nsamples) in value_vec
+            fid = h5open(replace(H_flag*"-L$L-W$W-Nsteps$Nsteps-Nsamples$Nsamples-Exported", "." => "_")*".h5","r")        
             G = fid["b"]
             bn_tot = read(G,"bn_tot")
             bn_avg = read(G,"bn_avg")
         close(fid)
 
+        if flag=="even"
+            bn_tot = bn_tot[2:2:end,:]
+        elseif flag == "odd"
+            bn_tot = bn_tot[1:2:end,:]
+        else
+            error("incorrect flag")
+        end
         #xs[iteration, realizations]
         #xs = x_generate(bn_tot,Nsamples)
         xs = x_generate(bn_tot,Nsamples)
@@ -338,9 +295,7 @@ function bn_statistics_biased(value_vec)
         xs_var = var(xs,dims=2)[:]
         xs_var_cumsum = var(xs_cumsum,dims=2)[:]
         xs_mean = mean(xs,dims=2)[:]
-        xs_med = median(xs,dims=2)[:]
         xs_cov = cov(xs,dims=2)
-        gn_cov = cov(xs_cumsum,dims=2)
         ratios = exp.(-1 .* xs)
 
         push!(bn_avgs,bn_avg)
@@ -348,14 +303,12 @@ function bn_statistics_biased(value_vec)
         push!(xs_vars,xs_var)
         push!(xs_var_cumsums,xs_var_cumsum)
         push!(xs_means,xs_mean)
-        push!(xs_medians,xs_med)
         push!(xs_covs,xs_cov)
-        push!(gn_covs,gn_cov)
-        push!(xs_median_cumsums,median(xs_cumsum,dims=2)[:])
         push!(xs_mean_cumsums,mean(xs_cumsum,dims=2)[:])
     end
-    return bn_avgs,xss,xs_vars,xs_var_cumsums,xs_means,xs_covs,gn_covs,xs_mean_cumsums, xs_medians, xs_median_cumsums
+    return bn_avgs,xss,xs_vars,xs_var_cumsums,xs_means,xs_covs,xs_mean_cumsums
 end
+
 function bn_statistics_MBL(value_vec)
     cd("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//UOH//Outs//ExportedBD2000")
     bn_avgs=[]

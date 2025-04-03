@@ -107,9 +107,31 @@ end
 auto_corr(A,B,N) = tr(A*B)/2^N
 n_choose_k(n::Int,k::Int) = factorial(n)/(factorial(k) * factorial(n-k))
 
-function FCS_moment(n::Int,N::Int,UQU::Vector{MPO},Qs::Vector{MPO})
+function FCS_moment(n::Int,N::Int,Q_t_IT::Vector{MPO},Qs_IT::Vector{MPO})
     #Need to input one vector of {UTQ^jU_T}_n>j>1 and another of {Q^j}
-    if length(UQU)<n/2
+    if length(Q_t_IT)<n/2
+        error("Incorrect number of FCS powers (need n/2)")
+    end
+
+    if iseven(n)==false
+        return 0
+    else
+        moment=2*Qs_IT[n] #j=0 term
+        #@show 1,tr(moment)
+        moment += ((-1)^Int(n/2)) * n_choose_k(n,Int(n/2)) * apply(Q_t_IT[Int(n/2)],Qs_IT[Int(n/2)])
+        #@show 2,tr(moment)
+        for j in 1:Int(n/2)-1 
+            moment += 2 * ((-1)^j) * n_choose_k(n,j) * apply(Q_t_IT[j],Qs_IT[n-j])
+        #    @show 3,tr(moment)
+        end
+
+        return tr(moment)/2^N
+    end
+end
+
+function FCS_moment(n::Int,N::Int,Q_t::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}},Qs::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}})
+    #Need to input one vector of {UTQ^jU_T}_n>j>1 and another of {Q^j}
+    if length(Q_t)<n/2
         error("Incorrect number of FCS powers (need n/2)")
     end
 
@@ -117,14 +139,86 @@ function FCS_moment(n::Int,N::Int,UQU::Vector{MPO},Qs::Vector{MPO})
         return 0
     else
         moment=2*Qs[n] #j=0 term
-        @show tr(moment)
-        moment += ((-1)^Int(n/2)) * n_choose_k(n,Int(n/2)) .* apply(UQU[Int(n/2)],Qs[Int(n/2)])
-        @show tr(moment)
+        #@show 1,tr(moment)
+        moment += ((-1)^Int(n/2)) * n_choose_k(n,Int(n/2)) * (Q_t[Int(n/2)]*Qs[Int(n/2)])
+        #@show 2,tr(moment)
         for j in 1:Int(n/2)-1 
-            moment += 2 * ((-1)^j) * n_choose_k(n,j)*apply(UQU[j],Qs[n-j])
-            @show tr(moment)
+            moment += 2 * ((-1)^j) * n_choose_k(n,j) * (Q_t[j]*Qs[n-j])
+         #   @show 3,tr(moment)
         end
 
         return tr(moment)/2^N
     end
+end
+
+function moment(n::Int,N::Int,Q_t_IT::Vector{MPO},Qs_IT::Vector{MPO})
+    if iseven(n) == false
+        return 0
+    else
+        M =  Qs_IT[n] + Q_t_IT[n] #nth term
+        for j in 1:n-1
+            M += ((-1)^j) * n_choose_k(n,j) * apply(Q_t_IT[n-j], Qs_IT[j])
+        end
+        return tr(M)/2^N
+    end
+end
+
+function moment(n::Int,N::Int,Q_t::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}},Qs::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}})
+    if iseven(n) == false
+        return 0
+    else
+        M =  Qs[n] + Q_t[n] #nth & 0th term
+        for j in 1:n-1
+            M += ((-1)^j) * n_choose_k(n,j) * Q_t[n-j] * Qs[j]
+        end
+        return tr(M)/2^N
+    end
+end
+function moment_eq19(n::Int,N::Int,Ut,U_t,Q)
+    if iseven(n) == false
+        return 0
+    else
+        M =  (-1)^(n/2) * n_choose_k(n,Int(n/2)) *Ut*Q^(n/2) *U_t * Q^(n/2) #nth 
+        M += 2*Q^n #0th term
+        for j in 1:n-1
+            M += ((-1)^j) * n_choose_k(n,j) * Ut*Q^(j)*U_t * Q^(n-j)
+        end
+        return tr(M)/2^N
+    end
+end
+
+ comm(A,B) = A*B - B*A
+
+function moment_comm(n::Int,N::Int,Ut,U_t,Q::Union{Matrix{ComplexF64},SparseMatrixCSC{ComplexF64, Int64}})
+    if iseven(n) == false
+        return 0
+    else
+        M_ = comm(Q,U_t)
+        for i in 2:n
+            M_ = comm(Q,M_)
+        end
+    end
+    M = Ut*M_
+    return tr(M)/2^N
+end
+#=
+function moment_wf_calc(n::Int,Qs_IT::Vector{MPO},psi1_0::MPS,psi1_t::MPS,psi2_0::MPS,psi2_t::MPS)
+    if iseven(n) == false
+        return 0
+    else
+        M =  (inner(psi2_0,Qs_IT[n],psi1_0) + inner(psi1_t, Qs_IT[n],psi2_t))* inner(psi1_0,psi2_0) #nth term
+        for j in 1:n-1
+            M += ((-1)^j) * n_choose_k(n,j) * inner(psi1_t, Qs_IT[n-j], psi2_t) * inner(psi2_0, Qs_IT[j], psi1_0)
+        end
+        return M
+    end
+end
+=#
+function moment_wf_calc(Qs_t::Matrix,trQs::Matrix)
+    
+    m_2=trQs[2]*(2^(N+1))
+    m_4=trQs[4]*(2^(N+1))
+
+    
+
 end

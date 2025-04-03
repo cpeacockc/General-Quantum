@@ -1,4 +1,4 @@
-using Random, Statistics, LinearAlgebra, ITensors
+using Random, Statistics, LinearAlgebra, ITensors, ITensorMPS
 
 include("Pauli Generator.jl")
 include("IT_functions.jl")
@@ -209,9 +209,9 @@ function XXZnnn_gates(N::Int,Δ,γ,tau,s)
     gates = ITensor[]
     for j in 0:(N - 1)
             
-        s1 = s[j+1] #Initial site
-        s2 = s[(j +1)%N+1] #nearest-neighbor
-        s3 = s[(j +2)%N+1] #next-nearest-neighbors
+        @show s1 = s[j+1] #Initial site
+        @show s2 = s[(j +1)%N+1] #nearest-neighbor
+        @show s3 = s[(j +2)%N+1] #next-nearest-neighbors
 
             #Id is neccesary to add ITensors. Is this the best way to do it?
         h = 
@@ -227,6 +227,30 @@ function XXZnnn_gates(N::Int,Δ,γ,tau,s)
     end
     
     append!(gates, reverse(gates))
+    return gates
+end
+
+function XXZnnn_PBC_gates(N::Int,Δ,γ,tau,range,s)
+    gates = ITensor[]
+    for j in range
+            
+        @show s1 = s[j+1] #Initial site
+        @show s2 = s[(j +1)%N+1] #nearest-neighbor
+        @show s3 = s[(j +2)%N+1] #next-nearest-neighbors
+
+            #Id is neccesary to add ITensors. Is this the best way to do it?
+        h = 
+          4 * op("Sx", s1) * op("Sx", s2) * op("Id",s3) +
+          4 * op("Sy", s1) * op("Sy", s2) * op("Id",s3) +
+          4 * Δ * op("Sz", s1) * op("Sz", s2) * op("Id",s3) +
+    
+          4 * γ * op("Sx", s1) * op("Id",s2) * op("Sx", s3) +
+          4 * γ * op("Sy", s1) * op("Id",s2) * op("Sy", s3) +
+          4 * Δ * γ * op("Sz", s1) * op("Id",s2) * op("Sz", s3)
+    
+        push!(gates,exp(-im * tau * h))
+    end
+    
     return gates
 end
 
@@ -304,3 +328,132 @@ function CC_gates(N::Int64,hx::Union{Float64,Int64},tau::Union{Float64,Int64},s)
     append!(gates, reverse(gates))
     return gates
 end
+
+function XXZnn_PBC_gates(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},tau::Union{Float64,Int64},range::Union{StepRange{Int64, Int64},UnitRange{Int64}},s::Vector{Index{Int64}}) 
+    gates = ITensor[]
+    for j in range
+
+        #s1 = s[j] #Initial site
+        #s2 = s[j+1] #nearest-neighbor
+            
+        s1 = s[j+1] #Initial site
+        s2 = s[(j +1)%N+1] #nearest-neighbor
+
+        hj = (4*J)*(0.5*( 
+            op("Sx", s1) * op("Sx", s2) +
+            op("Sy", s1) * op("Sy", s2) )+
+            Δ[j+1] * op("Sz", s1) * op("Sz", s2))
+    
+        push!(gates,exp(-im * tau * hj))
+    end
+    
+    return gates
+end
+
+
+function J_all_gates(N::Int64,tau::Union{Float64,Int64},gamma::Union{Float64,Int64},s)
+    gates = ITensor[]
+
+    for j in 0:(N-1)
+        s1 = s[j+1] #Initial site
+        s2 = s[(j +1)%N+1] #nearest-neighbor
+
+        hj = gamma*(op("Sx", s1) * op("Sy", s2)-
+                op("Sy", s1) * op("Sx", s2) )
+                
+        push!(gates,exp(-im * tau / 2 * hj))
+
+    end
+    append!(gates,reverse(gates))
+    return gates
+end
+
+
+function XXZnn_Efield_gates(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},tau::Union{Float64,Int64,ComplexF64},alpha::Union{Float64,Int64},range::StepRange{Int64, Int64},s) 
+
+    gates = ITensor[]
+    for j in range
+        #j is defined to more easily make the modulo work for periodic boundary conditions
+            
+        s1 = s[j] #Initial site
+        s2 = s[(j)%N+1] #nearest-neighbor
+
+        hj = (2*J)*( exp(im*alpha)*op("S-", s1) * op("S+", s2) +
+        exp(-im*alpha)*op("S+", s1) * op("S-", s2)) +
+            (4*J)*Δ[j] * (op("Sz", s1) * op("Sz", s2))
+        
+        #hj += gamma*im*(exp(im*alpha)*op("S-", s1) * op("S+", s2) -
+        #exp(-im*alpha)*op("S+", s1) * op("S-", s2) )
+    
+        push!(gates,exp(-im * tau * hj))
+    end
+
+    return gates
+end
+
+function XXZnn_Efield_H(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},alpha::Union{Float64,Int64},range::StepRange{Int64,Int64},s) 
+    op = OpSum()
+    for j in range #Open BCs
+
+       op += (4*J*Δ[j],"Sz",j,"Sz",(j)%N+1)
+       op += ((2*J)*exp(im*alpha),"S-",j,"S+",(j)%N+1)
+       op += ((2*J)*exp(-im*alpha),"S+",j,"S-",(j)%N+1)
+        
+    end
+    H = MPO(op,s)
+    return H
+end
+
+
+function XXZnn_2Δ_H_IT(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},s::Vector{Index{Int64}}) 
+    Op = OpSum()
+    for j in 0:(N-1)
+        Op += (4*J,"Sx",j+1, "Sx", (j +1)%N+1)
+        Op += (4*J,"Sy",j+1, "Sy", (j +1)%N+1)
+        Op += (4*J*Δ[j+1],"Sz",j+1, "Sz", (j +1)%N+1)
+
+    end
+    
+    H = MPO(Op,s)
+    return H
+end
+
+function Schwinger_H_IT(N::Int64,J::Union{Float64,Int64},m_lat::Union{Float64,Int64},w::Union{Float64,Int64},theta::Union{Float64,Int64,Irrational},s)
+    op = OpSum()
+
+    for n in 2:1:N-1
+        for k in 1:1:n-1
+            #H_ZZ
+            op += ((J/2)*(N-n)*4,"Sz",k,"Sz",n)
+        end
+    end
+
+    for n in 1:1:N-1
+        #H_XX
+        op += (0.5*(w- (((-1)^(n-1)) *(m_lat/2)*sin(theta)))*4,"Sx",n,"Sx",n+1)
+        #H_YY
+        op += (0.5*(w- (((-1)^(n-1)) *(m_lat/2)*sin(theta)))*4,"Sy",n,"Sy",n+1)
+        for l in 1:n+1
+            #H_Z 2nd half
+           op += ((J/2) * (n%2)*2,"Sz",l)
+        end
+    end
+
+    for n in 1:1:N
+        #H_Z 1st half
+        op += ((m_lat*cos(theta)/2)*2*((-1)^(n-1)),"Sz",n)
+    end
+
+    return MPO(op,s)
+end
+
+#=
+function Schwinger_H_IT_2(N::Int64,J::Union{Float64,Int64},m_lat::Union{Float64,Int64},w::Union{Float64,Int64},theta::Union{Float64,Int64,Irrational},s)
+    op = OpSum()
+
+    for i in 1:N-1
+        
+
+    return MPO(op,s)
+end
+=#

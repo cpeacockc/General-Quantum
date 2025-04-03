@@ -196,8 +196,6 @@ function QuantumSunH_randXYZ(N,L,alpha,spinflag)
     return Big_Op
 end
 
-
-
     
 function H_XYZ(N,J_vec,X_vec,Y_vec,Z_vec,flag)
     Jx=J_vec[1]
@@ -217,6 +215,62 @@ function H_XYZ(N,J_vec,X_vec,Y_vec,Z_vec,flag)
 
         str = zeros(N)
         str[i]=3;str[i+1]=3 #Z_i Z_i+1
+        Big_Op += Jz .* pauli_expand(str,flag)
+    end
+    
+    
+    for i in 1:N
+        str = zeros(N)
+        str[i]=1;#X_i
+        Big_Op += X_vec[i] .* pauli_expand(str,flag)
+    end
+
+    for i in 1:N
+    
+        str = zeros(N)
+        str[i]=2;#Y_i
+        Big_Op += Y_vec[i] .* pauli_expand(str,flag)
+    end
+    
+    for i in 1:N
+        str = zeros(N)
+        str[i]=3;#Z_i
+        Big_Op += Z_vec[i] .* pauli_expand(str,flag)
+    end
+    
+    return Big_Op
+end
+function randanti(N)
+    dim = 2^N
+    H = randn(dim, dim)  # Random normal matrix
+    return H - H'  # Enforce antisymmetry
+end
+function randH_real(N)
+    dim = 2^N
+    H = randn(dim, dim)  # Random normal matrix
+    return H + H'  # Enforce symmetry
+end
+
+H_MBL_basic(N,J,W,flag) = H_XYZ(N,J*ones(3),zeros(N),zeros(N),W .* (rand(MersenneTwister(),N).*2 .-1),flag)
+
+function H_XYZ_PBC(N,J_vec,X_vec,Y_vec,Z_vec,flag)
+    Jx=J_vec[1]
+    Jy=J_vec[2]
+    Jz=J_vec[3]
+    Big_Op=spzeros(2^N,2^N)
+    
+    for i in 0:N-1
+        str = zeros(N)
+        str[i+1]=1;str[(i +1)%N+1]=1 #X_i X_i+1
+        Big_Op += Jx .* pauli_expand(str,flag)
+
+
+        str = zeros(N)
+        str[i+1]=2;str[(i +1)%N+1]=2 #Y_i Y_i+1
+        Big_Op += Jy .* pauli_expand(str,flag)
+
+        str = zeros(N)
+        str[i+1]=3;str[(i +1)%N+1]=3 #Z_i Z_i+1
         Big_Op += Jz .* pauli_expand(str,flag)
     end
     
@@ -408,7 +462,7 @@ function H_LIOM(N,Z_vec,Z_field,ZZ_field,alpha,flag)
     return Big_Op
 end
 
-function H_Anderson1D(L,W,t)
+function H_Anderson1D(L::Int64,W::Union{Int64,Float64},t::Union{Int64,Float64})
     h = (W/2) .* (rand(L).*2 .-1) #random potentials
 
     H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
@@ -418,8 +472,49 @@ function H_Anderson1D(L,W,t)
     return H_Anderson
 end
 
+function H_Anderson1D(L::Int64,t::Union{Int64,Float64},h::Union{Vector{Float64},Vector{Int64}})
+    H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
 
-function H_Anderson1D(L,W,t,h)
+    H_Anderson[1,L]=-t
+    H_Anderson[L,1]=-t
+    return H_Anderson
+end
+
+function H_Random_Hop1D(L::Int64,W::Union{Int64,Float64},t::Union{Int64,Float64})
+    h1 = (W/2) .* (rand(L-1).*2 .-1) #random potentials
+
+    H_Anderson = spdiagm(-1 => (-t)*h1, 1 => (-t)*h1, 0=>zeros(L))
+
+    H_Anderson[1,L]=-(W/2) * (rand()*2 -1)
+    H_Anderson[L,1]=H_Anderson[1,L]
+    return H_Anderson
+end
+
+function H_Random_Hop1D(L::Int64,W::Union{Int64,Float64},t::Union{Int64,Float64},h::Vector{Float64})
+    
+
+    H_Anderson = spdiagm(-1 => (-t)*h, 1 => (-t)*h, 0=>zeros(L))
+
+    H_Anderson[1,L]=-(W/2) .* (rand().*2 .-1)
+    H_Anderson[L,1]=H_Anderson[1,L]
+    return H_Anderson
+end
+
+function H_Anderson1D_biased(L::Int64,W::Union{Int64,Float64},t::Union{Int64,Float64},a::Union{Int64,Float64})
+
+    #a=0 is normal anderson, a>0 biases forward hopping and visa versa
+    
+    h = (W/2) .* (rand(L).*2 .-1) #random potentials
+
+    H_Anderson = spdiagm(-1 => (-t*exp(-a*im))*ones(L-1), 1 => (-t*exp(a*im))*ones(L-1), 0=>h)
+
+    H_Anderson[1,L]=-t
+    H_Anderson[L,1]=-t
+    return H_Anderson
+end
+
+
+function H_Anderson1D_h(L::Int64,t::Union{Int64,Float64},h::Union{Vector{Float64},Vector{Int64}})
 
     H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
 
@@ -577,7 +672,7 @@ function XXZnnn_H(L::Int64)
     return H
 end
 
-function H_ChaoticChain(L::Int64,hx)
+function H_Quantum_Ising(L::Int64,hx)
 
     Big_Op = spzeros(2^L,2^L)
 

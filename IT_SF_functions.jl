@@ -1,7 +1,7 @@
 using ITensors, LinearAlgebra, HDF5, Random, Statistics, Dates, ProgressBars, CurveFit
-include("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//General_Quantum//Pauli Generator.jl")
+include("Pauli Generator.jl")
 
-function IT_XYZ_Jump1L_gates(L,s,dt,Jump_ops)
+function IT_XYZ_Jump1L_gates(L,s,d,dt,Jump_ops)
     dOpOps = [] #(op)'op array
     gates = ITensor[]
     for Op in Jump_ops
@@ -19,7 +19,7 @@ function IT_XYZ_Jump1L_gates(L,s,dt,Jump_ops)
         s1 = s[j]
         s2 = s[j + 1]
         hj =
-          ((d) * op("Sz", s1) * op("Sz", s2) +
+          ((d[j]) * op("Sz", s1) * op("Sz", s2) +
           (1/2)*(op("S+", s1) * op("S-", s2) +
           op("S-", s1) * op("S+", s2)))
                     
@@ -35,6 +35,19 @@ function IT_XYZ_Jump1L_gates(L,s,dt,Jump_ops)
     return gates
 
 end
+
+function J_calculate(psi,Js)
+    J_vals=Float64[]
+    for i in eachindex(Js)
+        J_calc=inner(psi',Js[i],psi)
+        if imag(J_calc)>=1e-12
+            error("J is imaginary: J=$(J)")
+        end
+        push!(J_vals,real(J_calc))
+    end
+    return J_vals
+end
+
 
 function Jump_calc(prob,Jump_op,psi,ITcutoff,count,totcount)
     if rand(1)[1]<prob
@@ -79,7 +92,7 @@ ZArray_t = Array{Float64}[]
 JArray_t = Array{Float64}[]
 bonddims = Array{Float64}[]
 
-Js = IT_Js(s,L)
+Js = IT_Js(L,s)
 
 
 totcount=0
@@ -169,6 +182,7 @@ tb = Dates.now()
       g["bonddims"] = reshape(reduce(hcat,bonddims),L-1,:)
       #g["t_save_index"] = t_save_index
       g["tot_runtime"] = tot_runtime
+      g["ZZ_corr"] = correlation_matrix(psi,"Sz","Sz")
       if psi_save == true
           g["psi"] = psi
       else
@@ -357,13 +371,28 @@ function get_data(L,d,gamma,state,data_flag)
     return J_t,M_t,times
 end
 
-function IT_Js(s,L)
+function IT_Js(L::Int64,s)
     Js=[]
 
     for i in 1:L-1
     os = OpSum()
-        os .+= (-2, "Sy",i,"Sx",(i+1))
-        os .+= (2, "Sx",i,"Sy",(i+1))
+        os .+= (-1, "Sy",i,"Sx",(i+1))
+        os .+= (1, "Sx",i,"Sy",(i+1))
+        J_op = MPO(os,s)
+        push!(Js,J_op)
+    end
+    return Js
+end
+
+
+function IT_Js_ring(L::Int64,s)
+    Js=[]
+
+    for i in 0:L-1
+
+    os = OpSum()
+        os .+= (-1, "Sy",i+1,"Sx",(i+1)%L+1)
+        os .+= (1, "Sx",i+1,"Sy",(i+1)%L+1)
         J_op = MPO(os,s)
         push!(Js,J_op)
     end
@@ -477,6 +506,65 @@ end
     #for i in 1:1:K
     #    rhos_export[i,:,:] =psi_Array[:,i]*psi_Array[:,i]'
     #end
+end
+
+function Dissipative_Hawking_Export(L,gamma_list,d1,d2,K,state)
+
+    for gamma in gamma_list    
+        #mkpath("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//SuperFluid_BH//Outs//WaveFunctionApproach//"*"L$(L)-"*replace("d$(d)-", "." => "_")*state*"//L$(L)-"*replace("g$gamma-d$(d)-", "." => "_")*state)
+        cd("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//HawkingRad_XXZ//Outs//Dissipative_TE//"*"IT_L$(L)-"*replace("d1$(d1)-d2$(d2)-", "." => "_")*state*"//IT_L$(L)-"*replace("g$gamma-", "." => "_")*state)
+        path = pwd()
+
+
+
+        fid = h5open(readdir(path)[1], "r")
+        g = fid["SF_TE"]
+        t_list = read(g,"times")
+        close(fid)
+
+        ZZ_corr_Array = zeros(L,L,K)
+        J_Array = zeros(L-1,length(t_list),K)
+        Z_Array = zeros(L,length(t_list),K)
+        psi_Array = complex(zeros(2^L,K))
+        times_Array = zeros(length(t_list),K)
+        bonddims_Array = zeros(L-1,length(t_list),K)
+        #iter_runtime_Array = zeros(length(t_list),K)
+
+            local i=0
+            for file in ProgressBar(readdir(path)[1:K])
+                i+=1
+                fid = h5open(file, "r")
+                g = fid["SF_TE"]
+                times_Array[:,i] = read(g,"times")
+                J_Array[:,:,i] = real.(read(g,"JArray_t"))
+                ZZ_corr_Array[:,:,i] = real.(read(g,"ZZ_corr"))
+                #bonddims_Array[:,:,i] = read(g,"bonddims")
+                #iter_runtime_Array[:,i] = read(g,"iter_runtime")
+                Z_Array[:,:,i] = read(g,"ZArray_t")
+                close(fid)
+            end
+
+            mkpath("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//HawkingRad_XXZ//Outs//IT_Exports")
+            cd("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//HawkingRad_XXZ//Outs//IT_Exports")
+
+            fid = h5open("IT_L$(L)-"*replace("g$gamma-d1$(d1)-d2$(d2)-", "." => "_")*state*".h5","w")
+                create_group(fid, "SF_TE")
+                g = fid["SF_TE"]
+                g["J_array"] = J_Array
+                #g["iter_runtime_array"] = iter_runtime_Array
+                g["times_array"] = times_Array
+                g["times"] = mean(times_Array,dims=2)[:,1]
+                g["J_t"] = mean(J_Array,dims=3)[:,:,1]
+                g["M_t"] = mean(Z_Array,dims=3)[:,:,1]
+                g["ZZ_corr"] = mean(ZZ_corr_Array,dims=3)[:,:,1]
+                g["K"] = K
+                #g["rhos_avg"] = mean(rhos_export,dims=1)[1,:,:]
+                #g["iter_runtime_array_avg"] = mean(iter_runtime_Array,dims=2)[:,1]
+                #g["bonddims_array"] = bonddims_Array
+                #g["bonddims_array_avg"] = mean(bonddims_Array,dims=3)[:,:,1]
+            close(fid)
+        end
+
 end
 
 
