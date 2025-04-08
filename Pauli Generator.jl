@@ -1,7 +1,7 @@
 #A code to take in strings and generate pauli-based Hamiltonians
 using SparseArrays, LinearAlgebra
 
-function pauli_expand(paulistr,flag)
+function pauli_expand(paulistr::Union{Vector{Int64},Vector{Float64}},flag::String)
     I=spdiagm([1,1])
     local X
     local Y
@@ -52,7 +52,7 @@ function pauli_expand(paulistr,flag)
 end
 
 
-function pauli_expand_rand(paulistr,flag,rands)
+function pauli_expand_rand(paulistr::Vector{Int64},flag::String,rands)
     I=spdiagm([1,1])
     local X
     local Y
@@ -101,7 +101,7 @@ function pauli_expand_rand(paulistr,flag,rands)
 end
 
 
-function Sz_site_fullOp(N,site,flag)
+function Sz_site_fullOp(N::Int64,site::Int64,flag::String)
     str = zeros(N)
     str[site]=3
     return pauli_expand(str,flag)

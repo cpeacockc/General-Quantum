@@ -29,7 +29,37 @@ function Lanczos(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matri
         O[2] = (A_n/b_n)
         #println("n=$n, bn=$b_n")
     end
-    return b1[2:end],b2[2:end],b_sb[2:end]
+    return b
+end
+
+function Lanczos_diag(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matrix,DenseMatrix,SparseMatrixCSC},Nsteps::Int64)
+
+
+    #Base vector
+    O = []
+    b = Float64[0]
+    d=Float64[0]
+    #Define O0
+    Probe/=Op_Norm(Probe)
+    push!(O,Probe)
+    LO_0 = L_n(O[1],H,2)
+    #Define b1, b0 is set to 0
+    push!(b,Op_Norm(LO_0))
+    push!(d,sum(diag(LO_0)))
+    
+    #Define O1
+    push!(O,LO_0/b[2])
+    
+    for n in 3:Nsteps
+        A_n = L_n(O[2],H,n) - b[n-1]*O[1]
+        b_n = Op_Norm(A_n)
+        push!(b,b_n)
+        push!(d,sum(diag(A_n)))
+        O[1]=O[2]
+        O[2] = (A_n/b_n)
+        #println("n=$n, bn=$b_n")
+    end
+    return b,d
 end
 
 function Lanczos_subtract(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H_1::Union{Matrix,DenseMatrix,SparseMatrixCSC},H_2::Union{Matrix,DenseMatrix,SparseMatrixCSC},Nsteps::Int64)

@@ -34,7 +34,21 @@ function test_get_S()
     println(norm(V - V2))
 end
 
-function schrieffer_wolff(H,iterations)
+function schrieffer_wolff(H::Union{Matrix{Float64},Matrix{Int64}},iterations::Int64)
+
+    for i in 1:iterations 
+        H0 = diagm(LinearAlgebra.diag(H))
+        V = H - H0
+        S = -S_calc(H0,V)
+        #comSH = comm(S,H)
+        H = H0 + comm(S,V)/2
+
+        @show norm(V - comm(S,H0))
+    end
+    return H
+end
+
+function schrieffer_wolff(H::Operator64,iterations::Int64)
 
     for i in 1:iterations 
         H0 = diagm(LinearAlgebra.diag(H))
