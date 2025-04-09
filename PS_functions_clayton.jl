@@ -65,3 +65,5 @@ function all_z(N::Int)
     return O
 end
 
+
+

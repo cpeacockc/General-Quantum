@@ -79,3 +79,22 @@ function H_MBL_PS(N::Int64,J::Float64,W::Float64)
 
     return H
 end
+
+function H_1DAnderson_PS(N::Int64,J::Float64,W::Float64)
+
+    Big_Op =  PauliStrings.Operator(N)
+    h = W .* (rand(MersenneTwister(),N).*2 .-1) #random field strengths
+
+    for n in 1:N-1
+        Big_Op += (J,"X",n,"X",n+1)
+        Big_Op += (J,"Y",n,"Y",n+1)
+        Big_Op += (J,"Z",n,"Z",n+1)
+        Big_Op += (h[n],"Z",n)
+    end
+
+    Big_Op += (h[N],"Z",N)
+
+    H = (1/W) * Big_Op #normalize by W
+
+    return H
+end
