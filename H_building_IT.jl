@@ -209,9 +209,9 @@ function XXZnnn_gates(N::Int,Δ,γ,tau,s)
     gates = ITensor[]
     for j in 0:(N - 1)
             
-        @show s1 = s[j+1] #Initial site
-        @show s2 = s[(j +1)%N+1] #nearest-neighbor
-        @show s3 = s[(j +2)%N+1] #next-nearest-neighbors
+        s1 = s[j+1] #Initial site
+        s2 = s[(j +1)%N+1] #nearest-neighbor
+        s3 = s[(j +2)%N+1] #next-nearest-neighbors
 
             #Id is neccesary to add ITensors. Is this the best way to do it?
         h = 
@@ -234,9 +234,9 @@ function XXZnnn_PBC_gates(N::Int,Δ,γ,tau,range,s)
     gates = ITensor[]
     for j in range
             
-        @show s1 = s[j+1] #Initial site
-        @show s2 = s[(j +1)%N+1] #nearest-neighbor
-        @show s3 = s[(j +2)%N+1] #next-nearest-neighbors
+        s1 = s[j+1] #Initial site
+        s2 = s[(j +1)%N+1] #nearest-neighbor
+        s3 = s[(j +2)%N+1] #next-nearest-neighbors
 
             #Id is neccesary to add ITensors. Is this the best way to do it?
         h = 
@@ -369,7 +369,7 @@ function J_all_gates(N::Int64,tau::Union{Float64,Int64},gamma::Union{Float64,Int
 end
 
 
-function XXZnn_Efield_gates(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},tau::Union{Float64,Int64,ComplexF64},alpha::Union{Float64,Int64},range::StepRange{Int64, Int64},s) 
+function XXZnn_Efield_gates(N::Int,J::Real,Δ::AbstractVector{<:Real},tau::Union{Real,ComplexF64},alpha::Real,range::StepRange{Int64, Int64},s) 
 
     gates = ITensor[]
     for j in range
@@ -378,7 +378,7 @@ function XXZnn_Efield_gates(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},t
         s1 = s[j] #Initial site
         s2 = s[(j)%N+1] #nearest-neighbor
 
-        hj = (2*J)*( exp(im*alpha)*op("S-", s1) * op("S+", s2) +
+        hj = (-2*J)*( exp(im*alpha)*op("S-", s1) * op("S+", s2) +
         exp(-im*alpha)*op("S+", s1) * op("S-", s2)) +
             (4*J)*Δ[j] * (op("Sz", s1) * op("Sz", s2))
         
@@ -387,17 +387,70 @@ function XXZnn_Efield_gates(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},t
     
         push!(gates,exp(-im * tau * hj))
     end
+    
+    return gates
+end
+function XXZnnn_Efield_gates(N::Int,J::Real,Δ::AbstractVector{<:Real}, gamma::Real,tau::Union{Float64,Int64,ComplexF64},alpha::Union{Float64,Int64},range::StepRange{Int64, Int64},s) 
 
+    gates = ITensor[]
+    for j in range
+        #j is defined to more easily make the modulo work for periodic boundary conditions
+            
+        s1 = s[j] #Initial site
+        s2 = s[(j)%N+1] #nearest-neighbor
+        s3 = s[(j+1)%N+1] #next-nearest-neighbor
+
+        hj = (-2*J)*( exp(im*alpha)*op("S-", s1) * op("S+", s2)*op("Id", s3) +
+                        exp(-im*alpha)*op("S+", s1) * op("S-", s2)*op("Id", s3)) +
+                            (4*Δ[j]) * (op("Sz", s1) * op("Sz", s2)*op("Id", s3)) +
+
+                                (-2*gamma)*( exp(im*alpha)*op("S-", s1)*op("Id", s2) * op("S+", s3) +
+                                    exp(-im*alpha)*op("S+", s1)*op("Id", s2) * op("S-", s3)) +
+                                        (4*gamma)* (op("Sz", s1)*op("Id", s2) * op("Sz", s3)) 
+    
+        push!(gates,exp(-im * tau * hj))
+    end
+    
     return gates
 end
 
-function XXZnn_Efield_H(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},alpha::Union{Float64,Int64},range::StepRange{Int64,Int64},s) 
+function XXZnn_Efield_H(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},alpha::Union{Float64,Int64},s::Vector{Index{Int64}},BC_flag::String) 
     op = OpSum()
-    for j in range #Open BCs
+    if BC_flag == "PBC"
+        range = 1:1:N
+    elseif BC_flag == "OBC"
+        range = 1:1:N-1
+    end
+    for j in range #Open BCs: 1:1:N-1, PBC: 1:1:N
 
        op += (4*J*Δ[j],"Sz",j,"Sz",(j)%N+1)
-       op += ((2*J)*exp(im*alpha),"S-",j,"S+",(j)%N+1)
-       op += ((2*J)*exp(-im*alpha),"S+",j,"S-",(j)%N+1)
+       op += ((-2*J)*exp(im*alpha),"S-",j,"S+",(j)%N+1)
+       op += ((-2*J)*exp(-im*alpha),"S+",j,"S-",(j)%N+1)
+        
+    end
+    H = MPO(op,s)
+    return H
+end
+
+function XXZnnn_Efield_H(N::Int,J::Real,Δ::AbstractVector{<:Real},gamma::Real,alpha::Real,s::Vector{Index{Int64}},BC_flag::String) 
+    op = OpSum()
+
+    if BC_flag == "PBC"
+        range = 1:1:N
+    elseif BC_flag == "OBC"
+        range = 1:1:N-1
+    end
+    for j in range
+
+       # nearest neighbor terms
+       op += (4*Δ[j],"Sz",j,"Sz",(j)%N+1)
+       op += ((-2*J)*exp(im*alpha),"S-",j,"S+",(j)%N+1)
+       op += ((-2*J)*exp(-im*alpha),"S+",j,"S-",(j)%N+1)
+
+       #next-nearest neighbor terms
+       op += (4*gamma,"Sz",j,"Sz",(j+1)%N+1)
+       op += ((-2*gamma)*exp(im*alpha),"S-",j,"S+",(j+1)%N+1)
+       op += ((-2*gamma)*exp(-im*alpha),"S+",j,"S-",(j+1)%N+1)
         
     end
     H = MPO(op,s)
@@ -408,8 +461,8 @@ end
 function XXZnn_2Δ_H_IT(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},s::Vector{Index{Int64}}) 
     Op = OpSum()
     for j in 0:(N-1)
-        Op += (4*J,"Sx",j+1, "Sx", (j +1)%N+1)
-        Op += (4*J,"Sy",j+1, "Sy", (j +1)%N+1)
+        Op += (-4*J,"Sx",j+1, "Sx", (j +1)%N+1)
+        Op += (-4*J,"Sy",j+1, "Sy", (j +1)%N+1)
         Op += (4*J*Δ[j+1],"Sz",j+1, "Sz", (j +1)%N+1)
 
     end

@@ -4,6 +4,42 @@ include("Pauli Generator.jl")
 include("Measurement_functions.jl")
 #include("pauli_strings.jl")
 
+#= chat gpt function, unchecked
+function finite_temperature_trace(operator::AbstractMatrix, energies::AbstractVector, T::Real)
+    weights = exp.(-energies ./ T)
+    Z = sum(weights)
+    diag_elements = diag(operator)
+    return dot(weights, real.(diag_elements)) / Z
+end
+=#
+
+
+function Lanczos(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matrix,DenseMatrix,SparseMatrixCSC},Nsteps::Int64)
+
+
+    #Base vector
+    O = []
+    b = Float64[0]
+    #Define O0
+    Probe/=Op_Norm(Probe)
+    push!(O,Probe)
+    LO_0 = L_n(O[1],H,2)
+    #Define b1, b0 is set to 0
+    push!(b,Op_Norm(LO_0))
+    
+    #Define O1
+    push!(O,LO_0/b[2])
+    
+    for n in 3:Nsteps
+        A_n = L_n(O[2],H,n) - b[n-1]*O[1]
+        b_n = Op_Norm(A_n)
+        push!(b,b_n)
+        O[1]=O[2]
+        O[2] = (A_n/b_n)
+        #println("n=$n, bn=$b_n")
+    end
+    return b
+end
 
 function Lanczos(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matrix,DenseMatrix,SparseMatrixCSC},Nsteps::Int64)
 
@@ -289,6 +325,27 @@ function x_generate(bn_tot,K)
     end
     return xs
 end
+function dimerization_statistics(value_vec,N_start,N_values)
+    cd("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//Anderson_krylov//Outs//Lanczos_exports/")
+    dimers_all = Vector{Float64}[]
+
+    for (H_flag,L,W,Nsteps,Nsamples) in value_vec
+        fid = h5open(replace(H_flag*"-L$L-W$W-Nsteps$Nsteps-Nsamples$Nsamples-Exported", "." => "_")*".h5","r")        
+        G = fid["b"]
+        bn_tot = read(G,"bn_tot")
+        close(fid)
+        dimers=Float64[]
+        for i in 1:length(Nsamples)
+            bn = bn_tot[:,i]
+            for n in N_start:1:(N_start+N_values)
+                push!(dimers,abs(bn[n]-bn[n+1]))
+            end
+        end
+    push!(dimers_all,dimers)
+    end
+    return dimers_all
+end
+
 
 function bn_statistics(value_vec)
     cd("C://MyDrive//Documents//A-Physics-PhD//Dries-Research//Code//Anderson_krylov//Outs//Lanczos_exports/")

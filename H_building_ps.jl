@@ -61,40 +61,69 @@ function QS_randXYZ_ps(N::Int64,L::Int64,alpha::Float64)
     return H
 end
 
-function H_MBL_PS(N::Int64,J::Float64,W::Float64)
+
+
+
+function H_1DAnderson_ps(N::Int64,J::Union{Float64,Int64},W::Union{Float64,Int64})
 
     Big_Op =  PauliStrings.Operator(N)
-    h = W .* (rand(MersenneTwister(),N).*2 .-1) #random field strengths
+    h = W .* (rand(N).*2 .-1) #random field strengths
 
     for n in 1:N-1
         Big_Op += (J,"X",n,"X",n+1)
         Big_Op += (J,"Y",n,"Y",n+1)
-        Big_Op += (J,"Z",n,"Z",n+1)
         Big_Op += (h[n],"Z",n)
     end
 
     Big_Op += (h[N],"Z",N)
+    #PBC
+    Big_Op += (J,"X",N,"X",1)
+    Big_Op += (J,"Y",N,"Y",1)
 
     H = (1/W) * Big_Op #normalize by W
 
     return H
 end
 
-function H_1DAnderson_PS(N::Int64,J::Float64,W::Float64)
+function H_1DMBL_PS(N::Int64,g::Float64)
 
     Big_Op =  PauliStrings.Operator(N)
-    h = W .* (rand(MersenneTwister(),N).*2 .-1) #random field strengths
+    h = (rand(N).*2 .-1) #random field strengths
 
     for n in 1:N-1
-        Big_Op += (J,"X",n,"X",n+1)
-        Big_Op += (J,"Y",n,"Y",n+1)
         Big_Op += (J,"Z",n,"Z",n+1)
         Big_Op += (h[n],"Z",n)
+        Big_Op += (g,"X",n)
+    end
+
+    #PBC
+    Big_Op += (g,"X",N)
+    Big_Op += (h[N],"Z",N)
+    Big_Op += (1,"Z",N,"Z",1)
+
+    H = Big_Op #normalize by W
+
+    return H
+end
+
+function H_Rand_Ising_ps(N::Int64,g::Float64)
+
+    Big_Op =  PauliStrings.Operator(N)
+    h = (rand(N).*2 .-1) #random field strengths
+
+    for n in 1:N-1
+        Big_Op += (1,"Z",n,"Z",n+1)
+        Big_Op += (h[n],"Z",n)
+        Big_Op += (g,"X",n)
     end
 
     Big_Op += (h[N],"Z",N)
+    Big_Op += (g,"X",N)
+    
+    #PBC
+    Big_Op += (1,"Z",N,"Z",1)
 
-    H = (1/W) * Big_Op #normalize by W
+    H = Big_Op #normalize by W
 
     return H
 end

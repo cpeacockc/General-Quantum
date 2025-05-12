@@ -45,6 +45,15 @@ function SFF_QS_avg(tau,K)
 
     return mean(SFF_t)
 end
+function gap_find(e_vals)
+    sorted_vals = sort!(e_vals)
+    idx = argmin(abs.(sorted_vals))
+    lower = idx > 1 ? sorted_vals[idx - 1] : nothing
+    center = sorted_vals[idx]
+    upper = idx < length(sorted_vals) ? sorted_vals[idx + 1] : nothing
+
+    return (lower, center, upper)
+end
 
 
 function Heisenberg_time_QS(N,L,alpha,xi_i,spinflag,K)
