@@ -116,27 +116,6 @@ end
 auto_corr(A,B,N) = tr(A*B)/2^N
 n_choose_k(n::Int,k::Int) = factorial(n)/(factorial(k) * factorial(n-k))
 
-function FCS_moment(n::Int,N::Int,Q_t_IT::Vector{MPO},Qs_IT::Vector{MPO})
-    #Need to input one vector of {UTQ^jU_T}_n>j>1 and another of {Q^j}
-    if length(Q_t_IT)<n/2
-        error("Incorrect number of FCS powers (need n/2)")
-    end
-
-    if iseven(n)==false
-        return 0
-    else
-        moment=2*Qs_IT[n] #j=0 term
-        #@show 1,tr(moment)
-        moment += ((-1)^Int(n/2)) * n_choose_k(n,Int(n/2)) * apply(Q_t_IT[Int(n/2)],Qs_IT[Int(n/2)])
-        #@show 2,tr(moment)
-        for j in 1:Int(n/2)-1 
-            moment += 2 * ((-1)^j) * n_choose_k(n,j) * apply(Q_t_IT[j],Qs_IT[n-j])
-        #    @show 3,tr(moment)
-        end
-
-        return tr(moment)/2^N
-    end
-end
 
 function FCS_moment(n::Int,N::Int,Q_t::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}},Qs::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}})
     #Need to input one vector of {UTQ^jU_T}_n>j>1 and another of {Q^j}
@@ -160,18 +139,6 @@ function FCS_moment(n::Int,N::Int,Q_t::Union{Vector{Matrix{ComplexF64}},Vector{S
     end
 end
 
-function moment(n::Int,N::Int,Q_t_IT::Vector{MPO},Qs_IT::Vector{MPO})
-    if iseven(n) == false
-        return 0
-    else
-        M =  Qs_IT[n] + Q_t_IT[n] #nth term
-        for j in 1:n-1
-            M += ((-1)^j) * n_choose_k(n,j) * apply(Q_t_IT[n-j], Qs_IT[j])
-        end
-        return tr(M)/2^N
-    end
-end
-
 function moment(n::Int,N::Int,Q_t::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}},Qs::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}})
     if iseven(n) == false
         return 0
@@ -183,6 +150,7 @@ function moment(n::Int,N::Int,Q_t::Union{Vector{Matrix{ComplexF64}},Vector{Spars
         return tr(M)/2^N
     end
 end
+
 function moment_eq19(n::Int,N::Int,Ut,U_t,Q)
     if iseven(n) == false
         return 0
@@ -210,6 +178,146 @@ function moment_comm(n::Int,N::Int,Ut,U_t,Q::Union{Matrix{ComplexF64},SparseMatr
     M = Ut*M_
     return tr(M)/2^N
 end
+
+function Correlator_ED_t(t_vec::Union{Vector,StepRangeLen,StepRange{Int64, Int64}},vals::Vector,vecs::Matrix,O::AbstractMatrix)
+    C_t_vec = Vector{Float64}(undef, length(t_vec))
+
+    Op_eigen = vecs' * O * vecs
+    Op_eigen_sq = abs2.(Op_eigen)
+    e_diff = (vals .- vals')
+    
+    for (i,t) in enumerate(t_vec)
+        phase_t = exp.(im .* e_diff .*t)
+        Prod = (phase_t * Op_eigen_sq)
+        C_t_vec[i]=real(tr(Prod))
+    end
+
+    return C_t_vec
+end
+
+function Spectral_fct_ED(H::AbstractMatrix,Os::Vector{AbstractMatrix},e_start::Int64=1,e_end::Int64=size(H)[1])
+    
+    vals,vecs = eigen(H)
+
+    Os_eig = [vecs' * O * vecs for O in Os]
+
+    freqs = Float64[]
+    peaks = [Float64[] for _ in 1:length(Os)]
+
+    vecs = vecs[:,e_start:e_end]
+    vals = vals[e_start:e_end]
+
+    for n in eachindex(vals)
+        for m in eachindex(vals)
+            push!(freqs,real(vals[n]-vals[m]))
+            for (i, Oeig) in enumerate(Os_eig)
+                push!(peaks[i], abs(Oeig[n, m])^2)
+            end        
+        end
+    end
+    return freqs, peaks
+end
+function Spectral_fct_ED(H::AbstractMatrix,O::AbstractMatrix,e_start::Int64=1,e_end::Int64=size(H)[1])
+    
+    vals,vecs = eigen(H)
+
+    O_eig = vecs' * O * vecs
+
+    freqs=Float64[]
+    peaks = Float64[]; 
+
+    vecs = vecs[:,e_start:e_end]
+    vals = vals[e_start:e_end]
+
+
+    for n in eachindex(vals)
+        for m in eachindex(vals)
+
+            push!(freqs,real(vals[n]-vals[m]))
+            push!(peaks,abs(O_eig[n,m])^2)
+        end
+    end
+    return freqs, peaks
+end
+
+function Spectral_fct_ED(H::AbstractMatrix,O::Array{<:Any,3})
+    
+    vals,vecs = eigen(H)
+
+    O_eig = zeros(size(O)) #not defined for complex H right now
+    for i in eachindex(size(O)[3])
+        O_eig[:,:,i] = vecs' * O[:,:,i] * vecs
+    end
+    O_eig = mean(O_eig,dims=3)[:,:]
+
+    #normalize so that peaks are of same order as bare Z operators for convenience
+    O_eig /= norm(O_eig)
+
+    freqs = Float64[]
+    peaks = Float64[]
+
+    for n in eachindex(vals)
+        for m in eachindex(vals)
+            push!(freqs,real(vals[n]-vals[m]))
+            push!(peaks,abs(O_eig[n,m])^2)
+        end
+    end
+    return freqs, peaks
+end
+
+
+
+
+function bin_indices(x::Vector{<:Real}, edges::Vector{<:Real})
+    nbins = length(edges) - 1
+    bins = Int.(zeros(length(x)))
+
+    for i in eachindex(x)
+        xi = x[i]
+
+        for b in 1:nbins
+
+            if edges[b] ≤ xi < edges[b+1] #find which bin xi belongs to 
+                bins[i] = b #label the bin for the point 
+                break
+            end
+        end
+        if bins[i]==0
+            error("error, value ($xi) outside of edges ($(edges[1]) to $(edges[end]))")
+        end
+    end
+
+    return bins
+end
+
+function Bin_heights(x::Vector{<:Real},y::Vector{<:Real},edges::Vector{<:Real})
+
+
+    bin_inds = bin_indices(x, edges)
+    # ACTION there are zeros in the bin_idx, fix that!
+    binned_y = zeros(length(edges) - 1)
+    for (i, bin_idx) in enumerate(bin_inds)
+        binned_y[bin_idx] += y[i]
+    end
+
+    return binned_y
+end
+function Bin_heights(x::Vector{<:Real},y::Vector{<:AbstractVector{<:Real}},edges::Vector{<:Real})
+
+
+    bin_inds = bin_indices(x, edges)
+    binned_y = [zeros(length(edges) - 1) for _ in 1:length(y)]  # One array per operator
+
+    for (i, bin_idx) in enumerate(bin_inds)
+        for (j, yj) in enumerate(y)
+            binned_y[j][bin_idx] += yj[i]
+        end
+    end
+
+    return binned_y
+end
+
+
 #=
 function moment_wf_calc(n::Int,Qs_IT::Vector{MPO},psi1_0::MPS,psi1_t::MPS,psi2_0::MPS,psi2_t::MPS)
     if iseven(n) == false
@@ -223,11 +331,3 @@ function moment_wf_calc(n::Int,Qs_IT::Vector{MPO},psi1_0::MPS,psi1_t::MPS,psi2_0
     end
 end
 =#
-function moment_wf_calc(Qs_t::Matrix,trQs::Matrix)
-    
-    m_2=trQs[2]*(2^(N+1))
-    m_4=trQs[4]*(2^(N+1))
-
-    
-
-end

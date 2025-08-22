@@ -1,7 +1,7 @@
 using ITensors, LinearAlgebra, HDF5, Random, Statistics, Dates, ProgressBars, CurveFit
 include("Pauli Generator.jl")
 
-function IT_XYZ_Jump1L_gates(L,s,d,dt,Jump_ops)
+function IT_XYZ_Jump1L_gates(L,s,dt,Jump_ops)
     dOpOps = [] #(op)'op array
     gates = ITensor[]
     for Op in Jump_ops
@@ -376,8 +376,8 @@ function IT_Js(L::Int64,s)
 
     for i in 1:L-1
     os = OpSum()
-        os .+= (-1, "Sy",i,"Sx",(i+1))
-        os .+= (1, "Sx",i,"Sy",(i+1))
+        os .+= (1im, "S+",i,"S-",(i+1))
+        os .+= (-1im, "S-",i,"S+",(i+1))
         J_op = MPO(os,s)
         push!(Js,J_op)
     end
@@ -391,8 +391,8 @@ function IT_Js_ring(L::Int64,s)
     for i in 0:L-1
 
     os = OpSum()
-        os .+= (-1, "Sy",i+1,"Sx",(i+1)%L+1)
-        os .+= (1, "Sx",i+1,"Sy",(i+1)%L+1)
+        os .+= (1im, "S+",i+1,"S-",(i+1)%L+1)
+        os .+= (-1im, "S-",i+1,"S+",(i+1)%L+1)
         J_op = MPO(os,s)
         push!(Js,J_op)
     end

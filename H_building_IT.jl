@@ -414,20 +414,23 @@ function XXZnnn_Efield_gates(N::Int,J::Real,Δ::AbstractVector{<:Real}, gamma::R
     return gates
 end
 
-function XXZnn_Efield_H(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},alpha::Union{Float64,Int64},s::Vector{Index{Int64}},BC_flag::String) 
+function XXZnn_Efield_H(N::Int,J::Real,Δ::Vector{Float64},alpha::Real,s::Union{Vector{Index{Int64}},Vector{Index{Vector{Pair{QN, Int64}}}}},BC_flag::String,L::Real=0) 
+    @show L
     op = OpSum()
     if BC_flag == "PBC"
         range = 1:1:N
     elseif BC_flag == "OBC"
         range = 1:1:N-1
+        op += (L,"Z",N)
     end
     for j in range #Open BCs: 1:1:N-1, PBC: 1:1:N
 
-       op += (4*J*Δ[j],"Sz",j,"Sz",(j)%N+1)
+       op += (J*Δ[j],"Z",j,"Z",(j)%N+1)
        op += ((-2*J)*exp(im*alpha),"S-",j,"S+",(j)%N+1)
        op += ((-2*J)*exp(-im*alpha),"S+",j,"S-",(j)%N+1)
-        
+        op += (L,"Z",j)
     end
+
     H = MPO(op,s)
     return H
 end

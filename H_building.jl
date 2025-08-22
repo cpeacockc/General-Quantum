@@ -462,7 +462,7 @@ function H_LIOM(N,Z_vec,Z_field,ZZ_field,alpha,flag)
     return Big_Op
 end
 
-function H_Anderson1D(L::Int64,W::Union{Int64,Float64},t::Union{Int64,Float64})
+function H_Anderson1D(L::Int64,W::Real,t::Real)
     h = (W/2) .* (rand(L).*2 .-1) #random potentials
 
     H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
@@ -472,7 +472,7 @@ function H_Anderson1D(L::Int64,W::Union{Int64,Float64},t::Union{Int64,Float64})
     return H_Anderson
 end
 
-function H_Anderson1D(L::Int64,t::Union{Int64,Float64},h::Union{Vector{Float64},Vector{Int64}})
+function H_Anderson1D(L::Int64,t::Real,h::Vector{Real})
     H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
 
     H_Anderson[1,L]=-t
