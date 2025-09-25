@@ -92,12 +92,13 @@ function QuantumSunH_randXYZ_IT(N::Int64,L::Int64,alpha::Float64,s)
        # A+=(alpha^u_i) 
 
         Big_Op .+= ((alpha^u_i),"Sx",i+N,"Sx",n_i)
+       # Big_Op .+= ((alpha^u_i),"Sy",i+N,"Sy",n_i)
 
         Big_Op .+=  (h_i[i],"Sz",i+N)
 
     end
 
-    H = +(MPO(Big_Op,s), (gamma/sqrt(2^N + 1) * Random_XYZ_IT(N,s)); alg="directsum")
+    H = +(MPO(Big_Op,s), (gamma/sqrt(2^N + 1) * Random_XYZ_IT(N,s)))
     return H
 end
 
@@ -213,7 +214,6 @@ function XXZnnn_gates(N::Int,Δ,γ,tau,s)
         s2 = s[(j +1)%N+1] #nearest-neighbor
         s3 = s[(j +2)%N+1] #next-nearest-neighbors
 
-            #Id is neccesary to add ITensors. Is this the best way to do it?
         h = 
           4 * op("Sx", s1) * op("Sx", s2) * op("Id",s3) +
           4 * op("Sy", s1) * op("Sy", s2) * op("Id",s3) +
@@ -459,7 +459,50 @@ function XXZnnn_Efield_H(N::Int,J::Real,Δ::AbstractVector{<:Real},gamma::Real,a
     H = MPO(op,s)
     return H
 end
+function XXZnn_TBC_gates(N::Int,J::Real,Δ::AbstractVector{<:Real},tau::Union{Real,ComplexF64},alpha::Real,range::StepRange{Int64, Int64},s) 
 
+    gates = ITensor[]
+    for j in range
+        #j is defined to more easily make the modulo work for periodic boundary conditions
+            
+        s1 = s[j] #Initial site
+        s2 = s[(j)%N+1] #nearest-neighbor
+
+        hj = (-2*J)*(op("S-", s1) * op("S+", s2) +
+        op("S+", s1) * op("S-", s2)) +
+            (4*J)*Δ[j] * (op("Sz", s1) * op("Sz", s2))
+
+        push!(gates,exp(-im * tau * hj))
+    end
+   hN =  (-2*J)*( exp(im*alpha)*op("S-", s[N]) * op("S+", s[1]) +
+        exp(-im*alpha)*op("S+", s[N]) * op("S-", s[1]))
+    push!(gates,exp(-im * tau * hN))
+    
+    return gates
+end
+function XXZnn_TBC_H(N::Int,J::Real,Δ::Vector{Float64},alpha::Real,s::Union{Vector{Index{Int64}},Vector{Index{Vector{Pair{QN, Int64}}}}},BC_flag::String,L::Real=0) 
+    @show L
+    op = OpSum()
+    if BC_flag == "PBC"
+        range = 1:1:N
+    elseif BC_flag == "OBC"
+        range = 1:1:N-1
+        op += (L,"Z",N)
+    end
+    for j in range #Open BCs: 1:1:N-1, PBC: 1:1:N
+
+       op += (J*Δ[j],"Z",j,"Z",(j)%N+1)
+       op += ((-2*J),"S-",j,"S+",(j)%N+1)
+       op += ((-2*J),"S+",j,"S-",(j)%N+1)
+        op += (L,"Z",j)
+    end
+    
+    op += ((-2*J)*exp(im*alpha),"S-",N,"S+",1)
+    op += ((-2*J)*exp(-im*alpha),"S+",N,"S-",1)
+
+    H = MPO(op,s)
+    return H
+end
 
 function XXZnn_2Δ_H_IT(N::Int,J::Union{Float64,Int64},Δ::Vector{Float64},s::Vector{Index{Int64}}) 
     Op = OpSum()

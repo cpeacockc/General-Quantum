@@ -114,7 +114,7 @@ function Level_ratios(H,spectrum_flag)
 end
 
 auto_corr(A,B,N) = tr(A*B)/2^N
-n_choose_k(n::Int,k::Int) = factorial(n)/(factorial(k) * factorial(n-k))
+n_choose_k(n::Int,k::Int) = binomial(BigInt(n), BigInt(k))
 
 
 function FCS_moment(n::Int,N::Int,Q_t::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}},Qs::Union{Vector{Matrix{ComplexF64}},Vector{SparseMatrixCSC{ComplexF64, Int64}}})
