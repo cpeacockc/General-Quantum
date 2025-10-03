@@ -472,6 +472,13 @@ function H_Anderson1D(L::Int64,W::Real,t::Real)
     return H_Anderson
 end
 
+function H_Anderson1D_OBC(L::Int64,W::Real,t::Real)
+    h = (W/2) .* (rand(L).*2 .-1) #random potentials
+
+    H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
+    return H_Anderson
+end
+
 function H_Anderson1D(L::Int64,t::Real,h::Vector{Real})
     H_Anderson = spdiagm(-1 => (-t)*ones(L-1), 1 => (-t)*ones(L-1), 0=>h)
 
@@ -547,6 +554,30 @@ function H_Anderson3D(L,W,t)
     return H
 end
 
+function H_Anderson3D_OBC(L,W,t)
+
+    H = spzeros(L^3,L^3)
+    Id = spdiagm(ones(L))
+        Big_Op = H_Anderson1D_OBC(L,0,t)
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,Id)
+        H += Big_Op
+
+        Big_Op = Id
+        Big_Op = kron(Big_Op,H_Anderson1D_OBC(L,0,t))
+        Big_Op = kron(Big_Op,Id)
+        H += Big_Op
+
+        Big_Op = Id
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,H_Anderson1D_OBC(L,0,t))
+        H += Big_Op
+
+    h = (W/2) .* (rand(L^3).*2 .-1)
+    H += spdiagm(h)
+    return H
+end
+
 function H_Anderson4D(L,W,t)
 
     H = spzeros(L^4,L^4)
@@ -581,6 +612,40 @@ function H_Anderson4D(L,W,t)
     return H
 end
 
+function H_Anderson4D_OBC(L,W,t)
+
+    H = spzeros(L^4,L^4)
+    Id = spdiagm(ones(L))
+    
+        Big_Op = H_Anderson1D_OBC(L,0,t)
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,Id)
+        H += Big_Op
+
+        Big_Op = Id
+        Big_Op = kron(Big_Op,H_Anderson1D_OBC(L,0,t))
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,Id)
+        H += Big_Op
+
+        Big_Op = Id
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,H_Anderson1D_OBC(L,0,t))
+        Big_Op = kron(Big_Op,Id)
+        H += Big_Op
+
+        Big_Op = Id
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,Id)
+        Big_Op = kron(Big_Op,H_Anderson1D_OBC(L,0,t))
+        H += Big_Op
+
+    h = (W/2) .* (rand(L^4).*2 .-1)
+    H += spdiagm(h)
+    return H
+end
+
 function H_Anderson2D(L,W,t)
 
     H = spzeros(L^2,L^2)
@@ -591,6 +656,23 @@ function H_Anderson2D(L,W,t)
 
         Big_Op = Id
         Big_Op = kron(Big_Op,H_Anderson1D(L,0,t))
+        H += Big_Op
+        
+    h = (W/2) .* (rand(L^2).*2 .-1)
+    H += spdiagm(h)
+    return H
+end
+
+function H_Anderson2D_OBC(L,W,t)
+
+    H = spzeros(L^2,L^2)
+    Id = spdiagm(ones(L))
+        Big_Op = H_Anderson1D_OBC(L,0,t)
+        Big_Op = kron(Big_Op,Id)
+        H += Big_Op
+
+        Big_Op = Id
+        Big_Op = kron(Big_Op,H_Anderson1D_OBC(L,0,t))
         H += Big_Op
         
     h = (W/2) .* (rand(L^2).*2 .-1)

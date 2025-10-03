@@ -5,14 +5,22 @@ include("Measurement_functions.jl")
 
 #include("pauli_strings.jl")
 
-#= chat gpt function, unchecked
-function finite_temperature_trace(operator::AbstractMatrix, energies::AbstractVector, T::Real)
-    weights = exp.(-energies ./ T)
-    Z = sum(weights)
-    diag_elements = diag(operator)
-    return dot(weights, real.(diag_elements)) / Z
+
+function dimerization_from_b(b::AbstractVector)
+    if b[1]==0
+        b[1]=1
+    elseif b[1]==1
+    else
+        b=vcat(1,b)
+    end
+
+    b_even = b[2:2:end]
+    b_odd=b[3:2:end]
+    m = min(length(b_even), length(b_odd))
+    b_dimerization = b_odd[1:m] .- b_even[1:m]
+    return b_dimerization
 end
-=#
+
 
 function dimerized_powerlaw_decay_bn(K_dim::Int,a::Real,b::Real,alpha::Real)
     bn = ones(K_dim-1) .* a
@@ -63,6 +71,8 @@ function Lanczos(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matri
     #Base vector
     O = []
     b = Float64[1]
+    error_0 = Float64[]
+    error_1 = Float64[]
     #Define O0
     Probe/=Op_Norm(Probe)
     push!(O,Probe)
@@ -80,12 +90,13 @@ function Lanczos(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matri
         O[1]=O[2]
         O[2] = (A_n/b_n)
         #println("n=$n, bn=$b_n")
-        error_0 = Op_Inner(Probe,O[2])
-        error_1 = Op_Inner(LO_0/b[2],O[2])
+        #push!(error_0,Op_Inner(Probe,O[2]))
+        #push!(error_1,Op_Inner(LO_0/b[2],O[2]))
         #@show n,error_0, error_1
     end
     return b
 end
+
 function Lanczos_ED(Probe::Union{Matrix,DenseMatrix,SparseMatrixCSC},H::Union{Matrix,DenseMatrix,SparseMatrixCSC},Nsteps::Int64)
 
     H = Matrix(H)
